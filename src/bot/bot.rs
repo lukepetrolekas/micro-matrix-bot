@@ -1,4 +1,6 @@
 use reqwest;
+use rusqlite::{Connection, OpenFlags, NO_PARAMS};
+
 use serde_derive::Deserialize;
 
 use std::collections::HashMap;
@@ -17,7 +19,9 @@ pub struct Bot {
     pub username: &'static str,
     password: String,
     client: reqwest::blocking::Client,
+    conn: rusqlite::Connection,
     access_token: String,
+    last_batch: String,
     logged_in: bool,
     task: crate::bot::task::Task,
     config: MatrixConfig,
@@ -39,15 +43,21 @@ impl Bot {
     pub fn new(
         username: &'static str,
         password: String,
-        config: MatrixConfig,
+        db_location: String,
         task: crate::bot::task::Task,
+        config: MatrixConfig,
     ) -> Bot {
+
         let client = reqwest::blocking::Client::new();
+        let conn = Connection::open_with_flags(db_location, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
+
         Bot {
             username,
             password,
             client,
+            conn,
             access_token: "".to_owned(),
+            last_batch: "".to_owned(),
             logged_in: false,
             task,
             config,
@@ -57,9 +67,31 @@ impl Bot {
     pub fn start(&mut self) {
         loop {
             self.login();
-            
+            match self.get_last_known_batch() {
+                Some(v) => self.last_batch = v,
+                None => {
+                /* let uri = format!("{}{}?{}&access_token={}", 
+                self.config.host, 
+                self.config.sync, 
+                "filter={\"room\":{\"timeline\":{\"limit\":1}}}",
+                &self.access_token),*/
+                }
+            }
+
+        /* complaining, rethink
+        match data {
+            Ok(next_batch) => let uri = format!(
+                "{}{}?{}&since={}&access_token={}", 
+                self.config.host.to_string(), 
+                self.config.sync.to_string(), 
+                "filter={\"room\":{\"timeline\":{\"limit\":1}}}", 
+                &next_batch, 
+                self.access_token),
+
+        }*/
+
             loop {
-                println!("I'm running!!!");
+                self.last_batch = self.sync();
                 thread::sleep(Duration::from_millis(2500));
                 break;
             }
@@ -124,7 +156,19 @@ impl Bot {
         }
     }
 
-    pub fn logout(&mut self) {
+    fn get_last_known_batch(&mut self) -> Option<String> {
+        let data: std::result::Result<String, rusqlite::Error> = self.conn.query_row("SELECT next_batch FROM matrix LIMIT 1", NO_PARAMS, |row| row.get(0));
+        match data {
+            Ok(v) => Some(v),
+            Err(_e) => None,
+        }
+    }
+
+    fn sync(&mut self) -> String {
+        return "hello".to_owned();
+    }
+
+    fn logout(&mut self) {
         self.logged_in = false;
         self.client.post(&format!("{}{}", self.config.host, self.config.logout)).send().unwrap();
     }
