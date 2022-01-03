@@ -1,65 +1,56 @@
 use reqwest;
 use rusqlite::{Connection, OpenFlags, NO_PARAMS};
-
-use serde_derive::Deserialize;
-
 use std::collections::HashMap;
 
 use std::thread;
 use std::time::Duration;
 
+use rand;
+
+use crate::bot::matrix::*;
+use crate::bot::task::Task;
+
+//Authorization: Bearer TheTokenHere
+
 pub struct MatrixConfig {
+    pub protocol: &'static str,
     pub host: &'static str,
     pub login: &'static str,
     pub sync: &'static str,
+    pub rooms: &'static str,
+    pub send_message: &'static str,
     pub logout: &'static str,
 }
 
 pub struct Bot {
     pub username: &'static str,
     password: String,
+    sender: String,
     client: reqwest::blocking::Client,
-    conn: rusqlite::Connection,
+    task: Task,
     access_token: String,
-    last_batch: String,
     logged_in: bool,
-    task: crate::bot::task::Task,
-    config: MatrixConfig,
-}
-
-#[derive(Debug)]
-pub enum MatrixError {
-    LogonFailure,
-    ServerFailure,
-    OtherFailure,
-}
-
-#[derive(Deserialize)]
-struct MatrixLoginResponse {
-    access_token: String,
+    config: &'static MatrixConfig,
 }
 
 impl Bot {
     pub fn new(
         username: &'static str,
         password: String,
-        db_location: String,
-        task: crate::bot::task::Task,
-        config: MatrixConfig,
+        task: Task,
+        config: &'static MatrixConfig,
     ) -> Bot {
-
         let client = reqwest::blocking::Client::new();
-        let conn = Connection::open_with_flags(db_location, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
+
 
         Bot {
             username,
             password,
+            sender: format!("@{}:{}", &username, &config.host),
             client,
-            conn,
-            access_token: "".to_owned(),
-            last_batch: "".to_owned(),
-            logged_in: false,
             task,
+            access_token: "".to_owned(),
+            logged_in: false,
             config,
         }
     }
@@ -67,33 +58,19 @@ impl Bot {
     pub fn start(&mut self) {
         loop {
             self.login();
-            match self.get_last_known_batch() {
-                Some(v) => self.last_batch = v,
-                None => {
-                /* let uri = format!("{}{}?{}&access_token={}", 
-                self.config.host, 
-                self.config.sync, 
-                "filter={\"room\":{\"timeline\":{\"limit\":1}}}",
-                &self.access_token),*/
-                }
-            }
+            println!("login");
 
-        /* complaining, rethink
-        match data {
-            Ok(next_batch) => let uri = format!(
-                "{}{}?{}&since={}&access_token={}", 
-                self.config.host.to_string(), 
-                self.config.sync.to_string(), 
-                "filter={\"room\":{\"timeline\":{\"limit\":1}}}", 
-                &next_batch, 
-                self.access_token),
+            let mut curr_next_batch = self.task.get_last_known_batch().unwrap_or("".to_owned());
 
-        }*/
-
+            //if a batch has been found
             loop {
-                self.last_batch = self.sync();
-                thread::sleep(Duration::from_millis(2500));
-                break;
+                match self.sync(curr_next_batch.clone()) {
+                    Some(v) => { curr_next_batch = v.clone(); }
+                    None => { break; }
+                }
+
+                self.task.tick(&curr_next_batch);
+                thread::sleep(Duration::from_millis(10000));
             }
 
             self.logout();
@@ -132,14 +109,17 @@ impl Bot {
 
         let response_result = self
             .client
-            .post(&format!("{}{}", self.config.host, self.config.login))
+            .post(&format!(
+                "{}://{}{}",
+                self.config.protocol, self.config.host, self.config.login
+            ))
             .json(&map)
             .send();
 
         match response_result {
             Ok(resp) => {
                 if resp.status().is_success() {
-                    let res: std::result::Result<MatrixLoginResponse, reqwest::Error> = resp.json();   
+                    let res: std::result::Result<MatrixLoginResponse, reqwest::Error> = resp.json();
                     match res {
                         Ok(v) => Ok(v.access_token),
                         Err(_e) => Err(MatrixError::LogonFailure),
@@ -150,26 +130,96 @@ impl Bot {
                     Err(MatrixError::OtherFailure)
                 }
             }
-            Err(_e) => {
-                Err(MatrixError::OtherFailure)
-            },
+            Err(_e) => Err(MatrixError::OtherFailure),
         }
     }
 
-    fn get_last_known_batch(&mut self) -> Option<String> {
-        let data: std::result::Result<String, rusqlite::Error> = self.conn.query_row("SELECT next_batch FROM matrix LIMIT 1", NO_PARAMS, |row| row.get(0));
-        match data {
-            Ok(v) => Some(v),
-            Err(_e) => None,
-        }
-    }
+    fn sync(&mut self, next_batch: String) -> Option<String> {
+        let mut url = format!(
+            "{}://{}{}?",
+            &self.config.protocol, &self.config.host, &self.config.sync
+        );
 
-    fn sync(&mut self) -> String {
-        return "hello".to_owned();
+        if !next_batch.is_empty() {
+            url = format!(
+                "{}&set_presence=online&since={}&timeout=25",
+                url, &next_batch
+            );
+        }
+
+        let res_result: std::result::Result<MatrixNextBatchResponse, reqwest::Error> = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.access_token))
+            .send()
+            .unwrap()
+            .json();
+
+        match res_result {
+            Ok(v) => {
+                if v.rooms.is_some() {
+                    for r in v.rooms.unwrap().join {
+                        // if there is a room, there will be events in the room
+                        for e in r.1.timeline.events {
+                            // only process events with content
+                            if e.content.is_some() {
+                                let b = e.content.unwrap();
+                                let s = e.sender.unwrap_or("".to_owned());
+
+                                // only process ones with a body, which implies a message
+                                // and NOT messages sent by the bot
+                                if b.body.is_some() && s.ne(&self.sender) {
+                                    let message: String = b.body.unwrap();
+
+                                    // do something...
+                                    println!("{}", message);
+                                }
+                            }
+                        }
+
+                    }
+                }
+
+                return Some(v.next_batch);
+            }
+            Err(e) => {
+                return Some(next_batch);
+            }
+        }
     }
 
     fn logout(&mut self) {
         self.logged_in = false;
-        self.client.post(&format!("{}{}", self.config.host, self.config.logout)).send().unwrap();
+        self.client
+            .post(&format!(
+                "{}://{}{}",
+                self.config.protocol, self.config.host, self.config.logout
+            ))
+            .send()
+            .unwrap();
+    }
+    fn send(&mut self, room: &str, message: &str) {
+        let request_url = format!(
+            "{}://{}{}/{}{}/{}",
+            &self.config.protocol,
+            &self.config.host,
+            &self.config.rooms,
+            room,
+            &self.config.send_message,
+            rand::random::<i32>()
+        );
+
+        let mut map = HashMap::new();
+        map.insert("msgtype", "m.text");
+        map.insert("body", message);
+
+        let resx: std::result::Result<reqwest::blocking::Response, reqwest::Error> = self
+            .client
+            .put(&request_url)
+            .header("Authorization", format!("Bearer {}", self.access_token))
+            .json(&map)
+            .send();
+
+        // println!("{}", &resx.unwrap().status());
     }
 }

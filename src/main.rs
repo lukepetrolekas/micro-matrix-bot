@@ -1,13 +1,17 @@
 use std::env;
+use rusqlite::{Connection, OpenFlags, NO_PARAMS};
 
 mod bot;
 
 fn main() {
-    const CONFIG: bot::bot::MatrixConfig  = bot::bot::MatrixConfig { 
-        host: "https://matrix.org/", 
-        sync: "_matrix/client/r0/sync", 
-        login: "_matrix/client/r0/login", 
-        logout: "_matrix/client/r0/logout"
+    const CONFIG: bot::bot::MatrixConfig  = bot::bot::MatrixConfig {
+        protocol: "https",
+        host: "matrix.org", 
+        sync: "/_matrix/client/v3/sync", 
+        login: "/_matrix/client/v3/login",
+        rooms: "/_matrix/client/v3/rooms",
+        send_message: "/send/m.room.message",
+        logout: "/_matrix/client/v3/logout"
     };
 
     let mut password="".to_owned();
@@ -30,9 +34,9 @@ fn main() {
             println!("Couldn't find the database at BOT_DATABASE_LOCATION\n{}", e); 
         },
     };
-  
+
     let task : bot::task::Task = bot::task::Task::new("events.db".to_owned());
-    let mut b : bot::bot::Bot = bot::bot::Bot::new("Erised", password, "events.db".to_owned(), task, CONFIG);
+    let mut b : bot::bot::Bot = bot::bot::Bot::new("erised", password, task, &CONFIG);
 
     b.start();
 }
