@@ -44,4 +44,8 @@ impl Task {
         }
         
     }
+
+    pub fn parse(&mut self, room: &String, sender: String, message: String) {
+        println!("message: {}", message);
+    }
 }

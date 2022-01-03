@@ -35,7 +35,7 @@ fn main() {
         },
     };
 
-    let task : bot::task::Task = bot::task::Task::new("events.db".to_owned());
+    let task : bot::task::Task = bot::task::Task::new(db);
     let mut b : bot::bot::Bot = bot::bot::Bot::new("erised", password, task, &CONFIG);
 
     b.start();

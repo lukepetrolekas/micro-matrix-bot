@@ -169,10 +169,7 @@ impl Bot {
                                 // only process ones with a body, which implies a message
                                 // and NOT messages sent by the bot
                                 if b.body.is_some() && s.ne(&self.sender) {
-                                    let message: String = b.body.unwrap();
-
-                                    // do something...
-                                    println!("{}", message);
+                                    self.task.parse(&r.0, s, b.body.unwrap());
                                 }
                             }
                         }
@@ -198,7 +195,8 @@ impl Bot {
             .send()
             .unwrap();
     }
-    fn send(&mut self, room: &str, message: &str) {
+
+    fn write(&mut self, room: &str, message: &str) {
         let request_url = format!(
             "{}://{}{}/{}{}/{}",
             &self.config.protocol,
