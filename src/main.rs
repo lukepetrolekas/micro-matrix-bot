@@ -1,6 +1,10 @@
 use std::env;
 use rusqlite::{Connection, OpenFlags, NO_PARAMS};
 
+
+#[macro_use]
+extern crate lazy_static;
+
 mod bot;
 
 fn main() {
@@ -35,7 +39,7 @@ fn main() {
         },
     };
 
-    let task : bot::task::Task = bot::task::Task::new(db);
+    let task : bot::task::Task = bot::task::Task::new(db, format!("@{}:{}", "erised", &CONFIG.host));
     let mut b : bot::bot::Bot = bot::bot::Bot::new("erised", password, task, &CONFIG);
 
     b.start();

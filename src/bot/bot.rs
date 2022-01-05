@@ -25,7 +25,6 @@ pub struct MatrixConfig {
 pub struct Bot {
     pub username: &'static str,
     password: String,
-    sender: String,
     client: reqwest::blocking::Client,
     task: Task,
     access_token: String,
@@ -46,7 +45,6 @@ impl Bot {
         Bot {
             username,
             password,
-            sender: format!("@{}:{}", &username, &config.host),
             client,
             task,
             access_token: "".to_owned(),
@@ -159,21 +157,7 @@ impl Bot {
             Ok(v) => {
                 if v.rooms.is_some() {
                     for r in v.rooms.unwrap().join {
-                        // if there is a room, there will be events in the room
-                        for e in r.1.timeline.events {
-                            // only process events with content
-                            if e.content.is_some() {
-                                let b = e.content.unwrap();
-                                let s = e.sender.unwrap_or("".to_owned());
-
-                                // only process ones with a body, which implies a message
-                                // and NOT messages sent by the bot
-                                if b.body.is_some() && s.ne(&self.sender) {
-                                    self.task.parse(&r.0, s, b.body.unwrap());
-                                }
-                            }
-                        }
-
+                        self.task.parse(&r.0, r.1.timeline);
                     }
                 }
 
