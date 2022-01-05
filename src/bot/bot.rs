@@ -73,13 +73,13 @@ impl Bot {
                 }
 
                 self.task.tick(&curr_next_batch);
-                thread::sleep(Duration::from_millis(10000));
+                thread::sleep(Duration::from_millis(5000));
             }
 
+            // attempt to recover?
             self.logout();
             println!("Rebooting politely...");
             thread::sleep(Duration::from_millis(10000));
-            break;
         }
         println!("Shutting down...");
     }
