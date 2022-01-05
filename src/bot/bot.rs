@@ -32,6 +32,11 @@ pub struct Bot {
     config: &'static MatrixConfig,
 }
 
+pub struct Message {
+    pub room: String,
+    pub message: String
+}
+
 impl Bot {
     pub fn new(
         username: &'static str,
@@ -157,7 +162,12 @@ impl Bot {
             Ok(v) => {
                 if v.rooms.is_some() {
                     for r in v.rooms.unwrap().join {
-                        self.task.parse(&r.0, r.1.timeline);
+                        let messages: Vec<Message> = self.task.parse(&r.0, r.1.timeline);
+                        
+                        // send the messages requested.
+                        for m in messages {
+                            self.write(&m.room, &m.message)
+                        }
                     }
                 }
 

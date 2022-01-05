@@ -1,5 +1,6 @@
 use rusqlite::{Connection, OpenFlags, NO_PARAMS};
 use crate::bot::matrix::MatrixTimeline;
+use crate::bot::bot::Message;
 
 use regex::Regex;
 
@@ -49,7 +50,7 @@ impl Task {
         }
     }
 
-    pub fn parse(&mut self, room: &String, timeline: MatrixTimeline) {
+    pub fn parse(&mut self, room: &String, timeline: MatrixTimeline) -> Vec<Message> {
         //Statically created variables only created once for every iteration of interpret
         lazy_static! {
             static ref CAL_LIST: Regex = Regex::new(r"^\s*![Cc]al\s+list").unwrap();
@@ -60,6 +61,8 @@ impl Task {
 
         let mut cal_list_flag = false;
         let mut cal_help_flag = false;
+
+        let mut messages : Vec<Message> = Vec::new();
 
         // if there is a room, there will be events in the room
         for e in timeline.events {
@@ -100,6 +103,8 @@ impl Task {
                                 "INSERT INTO events (host, description) VALUES (?1, ?2)",
                                 &[&s, event],
                             ).unwrap();
+
+                            messages.push(Message { room: room.to_string(), message: format!("Thank you {}. Event {} added to list.", s, event)});
                         }
 
                     }
@@ -121,11 +126,10 @@ impl Task {
                             )
                             .unwrap();
 
-                        /*
                         match t {
-                            0 => send(client, room, token, "No action taken as the event does not exist."),
-                            _ => send(client, room, token, "Event removed."),
-                        }*/
+                            0 => { messages.push(Message { room: room.to_string(), message: format!("Sorry, event #{} does not exist.", remove_event)}); }
+                            _ => { messages.push(Message { room: room.to_string(), message: format!("Event #{} removed by {}.", remove_event, s)}); }
+                        }
                     }
 
                 }
@@ -133,6 +137,9 @@ impl Task {
         }
 
         //if list message, help message...
-        
+        if cal_list_flag { messages.push(Message { room: room.to_string(), message: format!("cal list...")}); }
+        if cal_help_flag { messages.push(Message { room: room.to_string(), message: format!("cal help...")}); }
+
+        return messages;
     }
 }
