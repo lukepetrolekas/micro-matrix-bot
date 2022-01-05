@@ -104,6 +104,30 @@ impl Task {
 
                     }
 
+                     // if the body includes !cal rm [id] (only if creator and remover are the same person)
+                    if CAL_RM.find(&message).is_some() {
+                        let remove_event = CAL_RM
+                            .captures(&message)
+                            .unwrap()
+                            .get(1)
+                            .unwrap()
+                            .as_str();
+                        println!("rm = {}", remove_event);
+
+                        let t = self.conn
+                            .execute(
+                                "DELETE FROM events where host=?1 and rowid=?2",
+                                &[&s, remove_event],
+                            )
+                            .unwrap();
+
+                        /*
+                        match t {
+                            0 => send(client, room, token, "No action taken as the event does not exist."),
+                            _ => send(client, room, token, "Event removed."),
+                        }*/
+                    }
+
                 }
             }
         }
@@ -114,35 +138,7 @@ impl Task {
 
 
         
-        // if the body includes !cal rm [id] (only if creator and remover are the same person)
-        if CAL_RM.find(&e).is_some() {
-            let remove_event: String = CAL_RM
-                .captures(&e)
-                .unwrap()
-                .get(1)
-                .unwrap()
-                .as_str()
-                .to_string();
-            println!("rm = {}", remove_event);
-            println!("{}", remove_event);
-
-            //println!("{}", conn.un);
-            send(client, room, token, "Reviewing request....");
-
-            let t = conn
-                .execute(
-                    "DELETE FROM events where rowid=?1 and host=?2",
-                    &[&remove_event, parsed_name.as_str()],
-                )
-                .unwrap();
-
-            match t {
-                0 => send(client, room, token, "No action taken, doesn't match"),
-                _ => send(client, room, token, "Event removed"),
-            }
-
-            return Some(Response::Delete); // successful delete or rejection
-        }
+       
 
         send(
             client,
