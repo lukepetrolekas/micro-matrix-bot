@@ -140,13 +140,13 @@ impl Bot {
 
     fn sync(&mut self, next_batch: String) -> Option<String> {
         let mut url = format!(
-            "{}://{}{}?",
+            "{}://{}{}",
             &self.config.protocol, &self.config.host, &self.config.sync
         );
 
         if !next_batch.is_empty() {
             url = format!(
-                "{}&set_presence=online&since={}&timeout=25",
+                "{}?set_presence=online&since={}&timeout=25",
                 url, &next_batch
             );
         }
