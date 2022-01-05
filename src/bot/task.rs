@@ -133,21 +133,6 @@ impl Task {
         }
 
         //if list message, help message...
-
-        /*
-
-
         
-       
-
-        send(
-            client,
-            room,
-            token,
-            "I don't understand the request. cal (add|rm <n>|list|help)",
-        );
-        None
-
-        */
     }
 }
