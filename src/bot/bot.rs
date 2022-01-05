@@ -1,5 +1,4 @@
 use reqwest;
-use rusqlite::{Connection, OpenFlags, NO_PARAMS};
 use std::collections::HashMap;
 
 use std::thread;
@@ -9,6 +8,9 @@ use rand;
 
 use crate::bot::matrix::*;
 use crate::bot::task::Task;
+
+use log::{info, trace, warn};
+
 
 //Authorization: Bearer TheTokenHere
 
@@ -61,7 +63,7 @@ impl Bot {
     pub fn start(&mut self) {
         loop {
             self.login();
-            println!("login");
+            info!("Login successful.");
 
             let mut curr_next_batch = self.task.get_last_known_batch().unwrap_or("".to_owned());
 
@@ -78,10 +80,9 @@ impl Bot {
 
             // attempt to recover?
             self.logout();
-            println!("Rebooting politely...");
+            info!("Rebooting politely...");
             thread::sleep(Duration::from_millis(10000));
         }
-        println!("Shutting down...");
     }
 
     fn login(&mut self) {
@@ -95,13 +96,13 @@ impl Bot {
                     break;
                 }
                 Err(e) => {
-                    println!("Connection failed. {:?}", e);
+                    warn!("Connection failed. {:?}", e);
                     thread::sleep(Duration::from_millis(30000));
                 }
             }
         }
 
-        println!("Connection successful.");
+        info!("Connection successful.");
     }
 
     fn get_access_token(&mut self) -> Result<String, MatrixError> {
@@ -212,6 +213,6 @@ impl Bot {
             .json(&map)
             .send();
 
-        // println!("{}", &resx.unwrap().status());
+        info!("{}", &resx.unwrap().status());
     }
 }

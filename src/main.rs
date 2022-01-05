@@ -1,13 +1,20 @@
 use std::env;
 use rusqlite::{Connection, OpenFlags, NO_PARAMS};
 
-
 #[macro_use]
 extern crate lazy_static;
+
+use log::LevelFilter;
+use log::{info, trace, warn};
 
 mod bot;
 
 fn main() {
+
+    simple_logging::log_to_stderr(LevelFilter::Info);
+    simple_logging::log_to_stderr(LevelFilter::Trace);
+    simple_logging::log_to_stderr(LevelFilter::Warn);
+
     const CONFIG: bot::bot::MatrixConfig  = bot::bot::MatrixConfig {
         protocol: "https",
         host: "matrix.org", 
@@ -26,7 +33,7 @@ fn main() {
             password = v; 
         },
         Err(e) => { 
-            println!("Couldn't read the environment variable BOT_PASSWORD\n{}", e); 
+            warn!("Couldn't read the environment variable BOT_PASSWORD\n{}", e); 
         },
     };
 
@@ -35,12 +42,14 @@ fn main() {
             db = v; 
         },
         Err(e) => { 
-            println!("Couldn't find the database at BOT_DATABASE_LOCATION\n{}", e); 
+            warn!("Couldn't find the database at BOT_DATABASE_LOCATION\n{}", e); 
         },
     };
 
     let task : bot::task::Task = bot::task::Task::new(db, format!("@{}:{}", "erised", &CONFIG.host));
     let mut b : bot::bot::Bot = bot::bot::Bot::new("erised", password, task, &CONFIG);
 
+    trace!("Starting program.");
     b.start();
+    trace!("Ending program.");
 }

@@ -4,6 +4,8 @@ use crate::bot::bot::Message;
 
 use regex::Regex;
 
+use log::{info, trace, warn};
+
 pub struct Task {
     conn: rusqlite::Connection,
     sender: String,
@@ -47,7 +49,6 @@ impl Task {
         //yes this costs 1 initial re-write but we should get a lot out of it.
 
         if !(next_batch.is_empty()) {
-            println!("updatebatch");
             self.conn
                 .execute(
                     "UPDATE matrix set next_batch = (?1) where id = 1",
@@ -58,7 +59,6 @@ impl Task {
     }
 
     pub fn parse(&mut self, room: &String, timeline: MatrixTimeline) -> Vec<Message> {
-        //Statically created variables only created once for every iteration of interpret
         lazy_static! {
             static ref CAL_LIST: Regex = Regex::new(r"^\s*![Cc]al\s+list").unwrap();
             static ref CAL_HELP: Regex = Regex::new(r"^\s*![Cc]al\s+help").unwrap();
@@ -82,7 +82,6 @@ impl Task {
                 // and NOT messages sent by the bot
                 if b.body.is_some() && s.ne(&self.sender) {
                     let message = b.body.unwrap();
-                    println!("echo: {}", message);
 
                     // if the body includes !cal list then save that the list should be shown (mutliple people could invoke it and spam channel)
                     if CAL_LIST.find(&message).is_some() {
@@ -102,9 +101,6 @@ impl Task {
                             .get(1)
                             .unwrap().as_str();
 
-                        println!("add = {}", event);
-
-                        //println!("{}", conn.un);
                         if !event.is_empty() {
                             self.conn.execute(
                                 "INSERT INTO events (host, description) VALUES (?1, ?2)",
@@ -112,8 +108,9 @@ impl Task {
                             ).unwrap();
 
                             messages.push(Message { room: room.to_string(), message: format!("Thank you {}. Event {} added to list.", s, event)});
-                        }
 
+                            info!("Event added.");
+                        }
                     }
 
                      // if the body includes !cal rm [id] (only if creator and remover are the same person)
@@ -124,7 +121,6 @@ impl Task {
                             .get(1)
                             .unwrap()
                             .as_str();
-                        println!("rm = {}", remove_event);
 
                         let t = self.conn
                             .execute(
@@ -134,8 +130,14 @@ impl Task {
                             .unwrap();
 
                         match t {
-                            0 => { messages.push(Message { room: room.to_string(), message: format!("Sorry, event #{} does not exist.", remove_event)}); }
-                            _ => { messages.push(Message { room: room.to_string(), message: format!("Event #{} removed by {}.", remove_event, s)}); }
+                            0 => { 
+                                messages.push(Message { room: room.to_string(), message: format!("Sorry, event #{} does not exist.", remove_event)}); 
+                                info!("An attempt to remove occured that failed.");
+                            }
+                            _ => { 
+                                messages.push(Message { room: room.to_string(), message: format!("Event #{} removed by {}.", remove_event, s)}); 
+                                info!("Event removed.");
+                            }
                         }
                     }
 
@@ -176,11 +178,15 @@ impl Task {
                 l = format!("Calendar List\n#\tDescription\tHost\n{}", l);
             }
         
-            messages.push(Message { room: room.to_string(), message: l}); 
+            messages.push(Message { room: room.to_string(), message: l});
+            info!("The list of events was requested.");
         }
         
         
-        if cal_help_flag { messages.push(Message { room: room.to_string(), message: format!("Hi I'm Erised the event bot. What do you desire? Commands: cal list, cal add <event>, cal rm <id>, cal help. (Use !)")}); }
+        if cal_help_flag { 
+            messages.push(Message { room: room.to_string(), message: format!("Hi I'm Erised the event bot. What do you desire? Commands: cal list, cal add <event>, cal rm <id>, cal help. (Use !)")}); 
+            info!("Help feature was requested.")
+        }
 
         return messages;
     }
