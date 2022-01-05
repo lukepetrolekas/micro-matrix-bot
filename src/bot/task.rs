@@ -9,6 +9,13 @@ pub struct Task {
     sender: String,
 }
 
+#[derive(Debug)]
+struct Event {
+    rowid: i32,
+    host: String,
+    description: String,
+}
+
 impl Task {
     pub fn new(db: String, sender: String) -> Task {
         Task {
@@ -137,9 +144,46 @@ impl Task {
         }
 
         //if list message, help message...
-        if cal_list_flag { messages.push(Message { room: room.to_string(), message: format!("cal list...")}); }
-        if cal_help_flag { messages.push(Message { room: room.to_string(), message: format!("cal help...")}); }
+        if cal_list_flag { 
+
+            let mut stmt = self.conn
+            .prepare("SELECT rowid, host, description FROM events")
+            .unwrap();
+
+            let events_iter = stmt
+                .query_map(NO_PARAMS, |row| 
+                    Ok( 
+                        Event {
+                            rowid: row.get(0)?,
+                            host: row.get(1)?,
+                            description: row.get(2)?,
+                        }
+                    )
+                ).unwrap();	
+
+            let mut l: String = "".to_string();
+            let mut count = 0;
+            
+            for e in events_iter {
+                count += 1;
+                let q = e.unwrap();
+                l = format!("{}{}\t{}\t{}\n",l, q.rowid, q.description, q.host);
+            }
+
+            if count == 0 {
+                l = "\nThere are no events currently.".to_string();
+            } else {           
+                l = format!("Calendar List\n#\tDescription\tHost\n{}", l);
+            }
+        
+            messages.push(Message { room: room.to_string(), message: l}); 
+        }
+        
+        
+        if cal_help_flag { messages.push(Message { room: room.to_string(), message: format!("Hi I'm Erised the event bot. What do you desire? Commands: cal list, cal add <event>, cal rm <id>, cal help. (Use !)")}); }
 
         return messages;
     }
+
+    
 }
