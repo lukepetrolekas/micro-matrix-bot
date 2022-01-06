@@ -11,9 +11,9 @@ mod bot;
 
 fn main() {
 
-    simple_logging::log_to_stderr(LevelFilter::Info);
-    simple_logging::log_to_stderr(LevelFilter::Trace);
-    simple_logging::log_to_stderr(LevelFilter::Warn);
+    simple_logging::log_to_file("test.log", LevelFilter::Info);
+    simple_logging::log_to_file("test.log", LevelFilter::Warn);
+    simple_logging::log_to_file("test.log", LevelFilter::Trace);
 
     const CONFIG: bot::bot::MatrixConfig  = bot::bot::MatrixConfig {
         protocol: "https",
