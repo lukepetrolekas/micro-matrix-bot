@@ -63,7 +63,7 @@ impl Bot {
     pub fn start(&mut self) {
         loop {
             self.login();
-            info!("Login successful.");
+            info!("Login successful."); 
 
             let mut curr_next_batch = self.task.get_last_known_batch().unwrap_or("".to_owned());
 
@@ -151,33 +151,30 @@ impl Bot {
             );
         }
 
-        let res_result: std::result::Result<MatrixNextBatchResponse, reqwest::Error> = self
+        let resp = self
             .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.access_token))
-            .send()
-            .unwrap()
-            .json();
+            .send();
 
-        match res_result {
-            Ok(v) => {
-                if v.rooms.is_some() {
-                    for r in v.rooms.unwrap().join {
-                        let messages: Vec<Message> = self.task.parse(&r.0, r.1.timeline);
-                        
-                        // send the messages requested.
-                        for m in messages {
-                            self.write(&m.room, &m.message)
-                        }
-                    }
+        // if it fails, oh well, try again.
+        if resp.is_err() {
+            return Some(next_batch);
+        }
+
+        let v: MatrixNextBatchResponse = resp.unwrap().json().unwrap();
+        
+        if v.rooms.is_some() {
+            for r in v.rooms.unwrap().join {
+                let messages: Vec<Message> = self.task.parse(&r.0, r.1.timeline);
+                // send the messages requested.
+                for m in messages {
+                    self.write(&m.room, &m.message)
                 }
-
-                return Some(v.next_batch);
-            }
-            Err(e) => {
-                return Some(next_batch);
             }
         }
+
+        return Some(v.next_batch);
     }
 
     fn logout(&mut self) {
