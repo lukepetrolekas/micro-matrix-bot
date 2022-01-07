@@ -6,6 +6,10 @@ use regex::Regex;
 
 use log::{info, trace, warn};
 
+use dateparser::parse_with_timezone;
+use chrono::offset::Local;
+use std::error::Error;
+
 pub struct Task {
     conn: rusqlite::Connection,
     sender: String,
@@ -62,7 +66,7 @@ impl Task {
         lazy_static! {
             static ref CAL_LIST: Regex = Regex::new(r"^\s*![Cc]al\s+list").unwrap();
             static ref CAL_HELP: Regex = Regex::new(r"^\s*![Cc]al\s+help").unwrap();
-            static ref CAL_ADD: Regex = Regex::new(r#"^\s*![Cc]al\s+add\s+(.*)"#).unwrap();
+            static ref CAL_ADD: Regex = Regex::new(r#"^\s*![Cc]al\s+add\s+([^\|]+)\s*\|\s*(.*)"#).unwrap();
             static ref CAL_RM: Regex = Regex::new(r"^\s*![Cc]al\s+rm\s+(\d+)").unwrap();
         }
 
@@ -101,15 +105,28 @@ impl Task {
                             .get(1)
                             .unwrap().as_str();
 
-                        if !event.is_empty() {
+                        let dt = CAL_ADD
+                            .captures(&message)
+                            .unwrap()
+                            .get(2)
+                            .unwrap().as_str();
+
+                        let attempt_dt_parse = parse_with_timezone(dt, &Local);
+                        
+                        if !event.is_empty() && attempt_dt_parse.is_ok() {
+                            let utc_dt = attempt_dt_parse.unwrap();
+
                             self.conn.execute(
-                                "INSERT INTO events (host, description) VALUES (?1, ?2)",
-                                &[&s, event],
+                                "INSERT INTO events (host, description, dt) VALUES (?1, ?2, ?3)",
+                                &[&s, event, utc_dt.timestamp().to_string().as_str()],
                             ).unwrap();
 
-                            messages.push(Message { room: room.to_string(), message: format!("Thank you {}. Event {} added to list.", s, event)});
+                            messages.push(Message { room: room.to_string(), message: format!("Thank you {}. Event added to list.", s)});
 
                             info!("Event added.");
+                        } else {
+                            messages.push(Message { room: room.to_string(), message: format!("{}: Your event could not be added. Please try again or invoke !cal help.", s)});
+                            info!("Event addition failed.");
                         }
                     }
 
@@ -184,7 +201,7 @@ impl Task {
         
         
         if cal_help_flag { 
-            messages.push(Message { room: room.to_string(), message: format!("Hi I'm Erised the event bot. What do you desire? Commands: cal list, cal add <event>, cal rm <id>, cal help. (Use !)")}); 
+            messages.push(Message { room: room.to_string(), message: format!("Hi I'm Erised the event bot. What do you desire? Commands: cal list, cal add <event> | <datetime>, cal rm <id>, cal help. (Use !)")}); 
             info!("Help feature was requested.")
         }
 
