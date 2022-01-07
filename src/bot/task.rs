@@ -10,6 +10,8 @@ use dateparser::parse_with_timezone;
 use chrono::offset::Local;
 use std::error::Error;
 
+use chrono::{Utc, TimeZone, DateTime};
+
 pub struct Task {
     conn: rusqlite::Connection,
     sender: String,
@@ -20,6 +22,7 @@ struct Event {
     rowid: i32,
     host: String,
     description: String,
+    dt: i64
 }
 
 impl Task {
@@ -166,7 +169,7 @@ impl Task {
         if cal_list_flag { 
 
             let mut stmt = self.conn
-            .prepare("SELECT rowid, host, description FROM events")
+            .prepare("SELECT rowid, host, description, dt FROM events")
             .unwrap();
 
             let events_iter = stmt
@@ -176,6 +179,7 @@ impl Task {
                             rowid: row.get(0)?,
                             host: row.get(1)?,
                             description: row.get(2)?,
+                            dt: row.get(3)?,
                         }
                     )
                 ).unwrap();	
@@ -186,13 +190,15 @@ impl Task {
             for e in events_iter {
                 count += 1;
                 let q = e.unwrap();
-                l = format!("{}{}\t{}\t{}\n",l, q.rowid, q.description, q.host);
+                let local_dt : DateTime<Local> = DateTime::from(Utc.timestamp(q.dt, 0));
+
+                l = format!("{}{}\t{}\t{}\t{}\n",l, q.rowid, q.description, q.host, local_dt.format("%Y-%m-%d %H:%M"));
             }
 
             if count == 0 {
-                l = "\nThere are no events currently.".to_string();
+                l = "There are no events currently.".to_string();
             } else {           
-                l = format!("Calendar List\n#\tDescription\tHost\n{}", l);
+                l = format!("Calendar List\n#\tDescription\tHost\tDatetime\n{}", l);
             }
         
             messages.push(Message { room: room.to_string(), message: l});
